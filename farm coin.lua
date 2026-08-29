@@ -1,4 +1,4 @@
--- ROBOT ESCAPE — ФАРМ МОНЕТ v3.5 (ПРИОРИТЕТ БЛИЖАЙШИХ)
+-- ROBOT ESCAPE — ФАРМ МОНЕТ v3.6 (ИСПРАВЛЕННЫЙ ДЛЯ ТЕЛЕФОНА)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -7,15 +7,22 @@ local TeleportService = game:GetService("TeleportService")
 local LP = Players.LocalPlayer
 local Char = LP.Character or LP.CharacterAdded:Wait()
 
+print("🚀 Скрипт запущен (v3.6)")
+
+-- === ДИАГНОСТИКА ===
+print("✅ LocalPlayer найден:", LP.Name)
+
 -- === НАСТРОЙКИ ===
 local RECONNECT_TIMEOUT = 30 -- секунд без монет для реконнекта
 local STATE_FILE = "RyzenFarmState.txt"
 local autoReconnectEnabled = true
 
--- === ЧТЕНИЕ / ЗАПИСЬ СОСТОЯНИЯ ===
+-- === ЧТЕНИЕ / ЗАПИСЬ СОСТОЯНИЯ (С FALLBACK) ===
 local function saveState(farmingState)
     pcall(function()
-        writefile(STATE_FILE, farmingState and "ON" or "OFF")
+        if writefile then
+            writefile(STATE_FILE, farmingState and "ON" or "OFF")
+        end
     end)
 end
 
@@ -30,11 +37,19 @@ local function loadState()
 end
 
 -- === УДАЛЯЕМ СТАРЫЕ GUI ===
-for _, v in ipairs(game:GetService("CoreGui"):GetChildren()) do
-    if v.Name:find("CoinFarm") or v.Name:find("RobotEscape") then
-        v:Destroy()
+local function clearOldGUI()
+    for _, v in ipairs(game:GetService("CoreGui"):GetChildren()) do
+        if v.Name:find("CoinFarm") or v.Name:find("RobotEscape") then
+            v:Destroy()
+        end
+    end
+    for _, v in ipairs(LP:WaitForChild("PlayerGui"):GetChildren()) do
+        if v.Name:find("CoinFarm") or v.Name:find("RobotEscape") then
+            v:Destroy()
+        end
     end
 end
+clearOldGUI()
 
 -- === ПОЛУЧЕНИЕ ВСЕХ МОНЕТ ===
 local function getAllCoins()
@@ -49,17 +64,14 @@ local function getAllCoins()
     return coins
 end
 
--- === ПОЛУЧЕНИЕ БЛИЖАЙШЕЙ МОНЕТЫ (С ПРИОРИТЕТОМ) ===
+-- === ПОЛУЧЕНИЕ БЛИЖАЙШЕЙ МОНЕТЫ ===
 local function getClosestCoin()
     local coins = getAllCoins()
     if #coins == 0 then return nil end
-    
     local hrp = Char and Char:FindFirstChild("HumanoidRootPart")
     if not hrp then return coins[1] end
-    
     local closest = nil
     local closestDist = math.huge
-    
     for _, coin in ipairs(coins) do
         if coin and coin:IsA("BasePart") then
             local dist = (coin.Position - hrp.Position).Magnitude
@@ -69,7 +81,6 @@ local function getClosestCoin()
             end
         end
     end
-    
     return closest
 end
 
@@ -85,51 +96,35 @@ end
 
 -- === ПЛАВНЫЙ ПОЛЁТ ===
 local flySpeed = 30
-
 local function flyToCoin(coin)
     if not coin or not Char or not Char:FindFirstChild("HumanoidRootPart") then
         return false
     end
-    
     local hrp = Char.HumanoidRootPart
     local targetPos = coin.Position + Vector3.new(0, 2, 0)
     local distance = (hrp.Position - targetPos).Magnitude
-    
-    if distance < 2 then
-        return true
-    end
-    
+    if distance < 2 then return true end
     local duration = math.min(distance / flySpeed, 4)
-    
     local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(hrp, tweenInfo, {
-        CFrame = CFrame.new(targetPos)
-    })
-    
+    local tween = TweenService:Create(hrp, tweenInfo, { CFrame = CFrame.new(targetPos) })
     tween:Play()
     tween.Completed:Wait()
-    
     return true
 end
 
 -- === АВТО-РЕСПАВН ===
 local function respawnPlayer()
-    local player = LP
-    local char = player.Character
-    
+    local char = LP.Character
     if char then
         if char:FindFirstChild("Humanoid") then
             char.Humanoid.Sit = true
             char.Humanoid.WalkSpeed = 0
         end
-        
         char:BreakJoints()
-        wait(0.5)
-        
-        local newChar = player.CharacterAdded:Wait()
+        task.wait(0.5)
+        local newChar = LP.CharacterAdded:Wait()
         Char = newChar
-        wait(0.5)
-        
+        task.wait(0.5)
         print("🔄 Авто-респавн выполнен!")
     end
 end
@@ -138,37 +133,43 @@ end
 local function reconnectAndSaveState(farmingState)
     print("🔄 Авто-реконнект! Переход на другой сервер...")
     saveState(farmingState)
-    wait(1)
+    task.wait(1)
     TeleportService:Teleport(game.PlaceId)
 end
 
 -- === ESP МОНЕТ ===
 local espObjects = {}
 local espEnabled = true
+local lastESPUpdate = 0
 
 local function updateCoinESP()
+    if not espEnabled then
+        for _, v in ipairs(espObjects) do v:Destroy() end
+        espObjects = {}
+        return
+    end
+    -- Обновляем не чаще чем раз в 0.2 сек
+    local now = os.clock()
+    if now - lastESPUpdate < 0.2 then return end
+    lastESPUpdate = now
+
     for _, v in ipairs(espObjects) do v:Destroy() end
     espObjects = {}
-    if not espEnabled then return end
-    
     local coins = getAllCoins()
     local cam = workspace.CurrentCamera
-    
     for _, coin in ipairs(coins) do
         if coin and coin:IsA("BasePart") then
             local pos = coin.Position
             local vec, onScreen = cam:WorldToScreenPoint(pos)
-            
             if onScreen then
                 local circle = Instance.new("Frame")
-                circle.Parent = game:GetService("CoreGui")
+                circle.Parent = LP.PlayerGui
                 circle.Size = UDim2.new(0, 25, 0, 25)
                 circle.Position = UDim2.new(0, vec.X - 12, 0, vec.Y - 35)
                 circle.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
                 circle.BackgroundTransparency = 0.3
                 circle.BorderSizePixel = 2
                 circle.BorderColor3 = Color3.fromRGB(255, 200, 0)
-                
                 local icon = Instance.new("TextLabel", circle)
                 icon.Size = UDim2.new(1, 0, 1, 0)
                 icon.BackgroundTransparency = 1
@@ -177,7 +178,6 @@ local function updateCoinESP()
                 icon.TextSize = 16
                 icon.TextScaled = true
                 icon.Font = Enum.Font.GothamBold
-                
                 table.insert(espObjects, circle)
             end
         end
@@ -187,18 +187,25 @@ end
 -- === МИНИ-КАРТА ===
 local minimapObjects = {}
 local minimapEnabled = true
+local lastMinimapUpdate = 0
 
 local function updateMinimap()
+    if not minimapEnabled then
+        for _, v in ipairs(minimapObjects) do v:Destroy() end
+        minimapObjects = {}
+        return
+    end
+    local now = os.clock()
+    if now - lastMinimapUpdate < 0.3 then return end
+    lastMinimapUpdate = now
+
     for _, v in ipairs(minimapObjects) do v:Destroy() end
     minimapObjects = {}
-    if not minimapEnabled then return end
-    
     local coins = getAllCoins()
     local cam = workspace.CurrentCamera
     local viewport = cam.ViewportSize
-    
     local mapFrame = Instance.new("Frame")
-    mapFrame.Parent = game:GetService("CoreGui")
+    mapFrame.Parent = LP.PlayerGui
     mapFrame.Size = UDim2.new(0, 120, 0, 120)
     mapFrame.Position = UDim2.new(0.01, 0, 0.01, 0)
     mapFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -206,7 +213,6 @@ local function updateMinimap()
     mapFrame.BorderSizePixel = 2
     mapFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
     table.insert(minimapObjects, mapFrame)
-    
     local mapLabel = Instance.new("TextLabel", mapFrame)
     mapLabel.Size = UDim2.new(1, 0, 0, 15)
     mapLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -216,12 +222,10 @@ local function updateMinimap()
     mapLabel.TextSize = 10
     mapLabel.Font = Enum.Font.GothamBold
     table.insert(minimapObjects, mapLabel)
-    
     for _, coin in ipairs(coins) do
         if coin and coin:IsA("BasePart") then
             local pos = coin.Position
             local vec, onScreen = cam:WorldToScreenPoint(pos)
-            
             if onScreen then
                 local dot = Instance.new("Frame", mapFrame)
                 dot.Size = UDim2.new(0, 6, 0, 6)
@@ -237,20 +241,27 @@ local function updateMinimap()
     end
 end
 
--- === ГЛОБАЛЬНЫЙ СЧЁТЧИК МОНЕТ НА КАРТЕ ===
+-- === ГЛОБАЛЬНЫЙ СЧЁТЧИК МОНЕТ ===
 local coinCounterObjects = {}
 local coinCounterEnabled = true
+local lastCounterUpdate = 0
 
 local function updateCoinCounter()
+    if not coinCounterEnabled then
+        for _, v in ipairs(coinCounterObjects) do v:Destroy() end
+        coinCounterObjects = {}
+        return
+    end
+    local now = os.clock()
+    if now - lastCounterUpdate < 0.3 then return end
+    lastCounterUpdate = now
+
     for _, v in ipairs(coinCounterObjects) do v:Destroy() end
     coinCounterObjects = {}
-    if not coinCounterEnabled then return end
-    
     local coins = getAllCoins()
     local count = #coins
-    
     local counterFrame = Instance.new("Frame")
-    counterFrame.Parent = game:GetService("CoreGui")
+    counterFrame.Parent = LP.PlayerGui
     counterFrame.Size = UDim2.new(0, 150, 0, 30)
     counterFrame.Position = UDim2.new(0.02, 0, 0.15, 0)
     counterFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -258,7 +269,6 @@ local function updateCoinCounter()
     counterFrame.BorderSizePixel = 2
     counterFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
     table.insert(coinCounterObjects, counterFrame)
-    
     local counterLabel = Instance.new("TextLabel", counterFrame)
     counterLabel.Size = UDim2.new(1, 0, 1, 0)
     counterLabel.BackgroundTransparency = 1
@@ -269,11 +279,16 @@ local function updateCoinCounter()
     table.insert(coinCounterObjects, counterLabel)
 end
 
--- === СОЗДАНИЕ GUI (ГАРАНТИРОВАННОЕ ПОЯВЛЕНИЕ) ===
+-- === СОЗДАНИЕ GUI (В PlayerGui) ===
+local playerGui = LP:WaitForChild("PlayerGui")
+print("✅ PlayerGui найден:", playerGui.Name)
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CoinFarmGUI"
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Parent = playerGui
 ScreenGui.ResetOnSpawn = false
+
+print("✅ GUI создан в PlayerGui")
 
 -- ОСНОВНАЯ ПАНЕЛЬ
 local MainFrame = Instance.new("Frame")
@@ -287,7 +302,7 @@ MainFrame.Size = UDim2.new(0, 440, 0, 600)
 MainFrame.ClipsDescendants = true
 MainFrame.Active = true
 MainFrame.Draggable = true
-MainFrame.Visible = true  -- ВСЕГДА ВИДИМ ПРИ ЗАПУСКЕ
+MainFrame.Visible = true
 
 -- ЗАГОЛОВОК
 local Header = Instance.new("Frame", MainFrame)
@@ -299,7 +314,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(0.7, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🪙 ФАРМ МОНЕТ v3.5"
+Title.Text = "🪙 ФАРМ МОНЕТ v3.6"
 Title.TextColor3 = Color3.fromRGB(255, 200, 0)
 Title.TextSize = 18
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -342,10 +357,8 @@ FarmBtn.BorderSizePixel = 3
 FarmBtn.BorderColor3 = Color3.fromRGB(0, 255, 150)
 FarmBtn.Font = Enum.Font.GothamBold
 FarmBtn.ClipsDescendants = true
-
 local UICorner = Instance.new("UICorner", FarmBtn)
 UICorner.CornerRadius = UDim.new(1, 0)
-
 local FarmStatus = Instance.new("TextLabel", FarmBtn)
 FarmStatus.Size = UDim2.new(1, 0, 0.3, 0)
 FarmStatus.Position = UDim2.new(0, 0, 0.7, 0)
@@ -368,7 +381,6 @@ EspBtn.BorderSizePixel = 2
 EspBtn.BorderColor3 = Color3.fromRGB(0, 200, 255)
 EspBtn.Font = Enum.Font.GothamBold
 EspBtn.ClipsDescendants = true
-
 local EspCorner = Instance.new("UICorner", EspBtn)
 EspCorner.CornerRadius = UDim.new(0.3, 0)
 
@@ -384,7 +396,6 @@ MapBtn.BorderSizePixel = 2
 MapBtn.BorderColor3 = Color3.fromRGB(200, 100, 255)
 MapBtn.Font = Enum.Font.GothamBold
 MapBtn.ClipsDescendants = true
-
 local MapCorner = Instance.new("UICorner", MapBtn)
 MapCorner.CornerRadius = UDim.new(0.3, 0)
 
@@ -400,7 +411,6 @@ CounterBtn.BorderSizePixel = 2
 CounterBtn.BorderColor3 = Color3.fromRGB(255, 220, 50)
 CounterBtn.Font = Enum.Font.GothamBold
 CounterBtn.ClipsDescendants = true
-
 local CounterCorner = Instance.new("UICorner", CounterBtn)
 CounterCorner.CornerRadius = UDim.new(0.3, 0)
 
@@ -416,7 +426,6 @@ ReconnectBtn.BorderSizePixel = 2
 ReconnectBtn.BorderColor3 = Color3.fromRGB(255, 150, 50)
 ReconnectBtn.Font = Enum.Font.GothamBold
 ReconnectBtn.ClipsDescendants = true
-
 local ReconnectCorner = Instance.new("UICorner", ReconnectBtn)
 ReconnectCorner.CornerRadius = UDim.new(0.3, 0)
 
@@ -460,7 +469,7 @@ TimerText.TextColor3 = Color3.fromRGB(255, 200, 100)
 TimerText.TextSize = 12
 TimerText.Font = Enum.Font.Gotham
 
--- === КНОПКА ОТКРЫТИЯ/ЗАКРЫТИЯ ===
+-- === КНОПКА ОТКРЫТИЯ/ЗАКРЫТИЯ (ПЕРЕТАСКИВАЕМАЯ) ===
 local ToggleBtn = Instance.new("TextButton", ScreenGui)
 ToggleBtn.Size = UDim2.new(0, 55, 0, 55)
 ToggleBtn.Position = UDim2.new(0.05, 0, 0.85, 0)
@@ -475,14 +484,12 @@ ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.Active = true
 ToggleBtn.Draggable = true
 ToggleBtn.Visible = true
-
 local ToggleCorner = Instance.new("UICorner", ToggleBtn)
 ToggleCorner.CornerRadius = UDim.new(1, 0)
 
--- Перетаскивание
+-- Перетаскивание (работает на телефоне)
 local toggleDragging = false
 local dragStart, dragStartPos
-
 ToggleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         toggleDragging = true
@@ -490,26 +497,23 @@ ToggleBtn.InputBegan:Connect(function(input)
         dragStartPos = ToggleBtn.Position
     end
 end)
-
 ToggleBtn.InputChanged:Connect(function(input)
     if toggleDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStart
         local newPos = UDim2.new(
-            dragStartPos.X.Scale + delta.X / game:GetService("CoreGui").AbsoluteSize.X,
+            dragStartPos.X.Scale + delta.X / playerGui.AbsoluteSize.X,
             0,
-            dragStartPos.Y.Scale + delta.Y / game:GetService("CoreGui").AbsoluteSize.Y,
+            dragStartPos.Y.Scale + delta.Y / playerGui.AbsoluteSize.Y,
             0
         )
         ToggleBtn.Position = newPos
     end
 end)
-
 ToggleBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         toggleDragging = false
     end
 end)
-
 ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
 end)
@@ -519,6 +523,7 @@ local farming = false
 local coinsCollected = 0
 local startTime = os.time()
 local noCoinsCounter = 0
+local noCoinsStartTime = nil -- для точного отсчёта секунд
 
 -- === ФУНКЦИЯ ОБНОВЛЕНИЯ КНОПКИ ===
 local function updateButton(isFarming)
@@ -547,50 +552,20 @@ updateReconnectBtn()
 -- === ФАРМ ЛУП (С ПРИОРИТЕТОМ БЛИЖАЙШИХ МОНЕТ) ===
 local function farmLoop()
     while farming do
-        RunService.Heartbeat:Wait()
+        task.wait()
         setNoClip(true)
         
-        -- Получаем ближайшую монету
         local coin = getClosestCoin()
         
         if not coin then
-            noCoinsCounter = noCoinsCounter + 1
+            if noCoinsStartTime == nil then
+                noCoinsStartTime = os.time()
+            end
+            noCoinsCounter = os.time() - noCoinsStartTime
             StatusText.Text = "⏳ Ожидание монет... (" .. noCoinsCounter .. "с)"
             CoinInfo.Text = "❌ Монет нет на карте"
             TimerText.Text = "⏱️ Ожидание: " .. noCoinsCounter .. "с"
             
-            -- АВТО-РЕКОННЕКТ
             if autoReconnectEnabled and noCoinsCounter >= RECONNECT_TIMEOUT then
                 StatusText.Text = "🔄 Монет нет! Переключаем сервер..."
-                TimerText.Text = "⏱️ Реконнект через 3с..."
-                wait(3)
-                reconnectAndSaveState(farming)
-                return -- завершаем цикл, скрипт перезагрузит игру
-            end
-            
-            -- Обычный респавн (если реконнект выключен)
-            if not autoReconnectEnabled and noCoinsCounter >= 10 then
-                StatusText.Text = "🔄 Монет нет! Делаем респавн..."
-                TimerText.Text = "⏱️ Респавн через 3с..."
-                wait(3)
-                respawnPlayer()
-                noCoinsCounter = 0
-                wait(2)
-            end
-            
-            wait(1)
-            continue
-        end
-        
-        noCoinsCounter = 0
-        TimerText.Text = "⏱️ Монета найдена (ближайшая)!"
-        
-        CoinInfo.Text = "✅ Монета найдена! Летим..."
-        StatusText.Text = "🚀 Летим к монете..."
-        FarmStatus.Text = "ЛЕТИТ"
-        
-        local success = flyToCoin(coin)
-        
-        if success then
-            coinsCollected = coinsCollected + 1
-            local  
+                TimerText.Text = "⏱️ Реконне  
