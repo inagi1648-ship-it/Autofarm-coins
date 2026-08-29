@@ -1,4 +1,4 @@
--- ROBOT ESCAPE — ФАРМ МОНЕТ v3.0 (MEGA UPDATE)
+-- ROBOT ESCAPE — ФАРМ МОНЕТ v3.3 (СЧЁТЧИК + АВТО-РЕСПАВН)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -65,6 +65,28 @@ local function flyToCoin(coin)
     return true
 end
 
+-- === АВТО-РЕСПАВН ===
+local function respawnPlayer()
+    local player = LP
+    local char = player.Character
+    
+    if char then
+        if char:FindFirstChild("Humanoid") then
+            char.Humanoid.Sit = true
+            char.Humanoid.WalkSpeed = 0
+        end
+        
+        char:BreakJoints()
+        wait(0.5)
+        
+        local newChar = player.CharacterAdded:Wait()
+        Char = newChar
+        wait(0.5)
+        
+        print("🔄 Авто-респавн выполнен!")
+    end
+end
+
 -- === ESP МОНЕТ ===
 local espObjects = {}
 local espEnabled = true
@@ -72,7 +94,6 @@ local espEnabled = true
 local function updateCoinESP()
     for _, v in ipairs(espObjects) do v:Destroy() end
     espObjects = {}
-    
     if not espEnabled then return end
     
     local coins = getAllCoins()
@@ -115,14 +136,12 @@ local minimapEnabled = true
 local function updateMinimap()
     for _, v in ipairs(minimapObjects) do v:Destroy() end
     minimapObjects = {}
-    
     if not minimapEnabled then return end
     
     local coins = getAllCoins()
     local cam = workspace.CurrentCamera
     local viewport = cam.ViewportSize
     
-    -- Рамка мини-карты
     local mapFrame = Instance.new("Frame")
     mapFrame.Parent = game:GetService("CoreGui")
     mapFrame.Size = UDim2.new(0, 120, 0, 120)
@@ -133,7 +152,6 @@ local function updateMinimap()
     mapFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
     table.insert(minimapObjects, mapFrame)
     
-    -- Надпись
     local mapLabel = Instance.new("TextLabel", mapFrame)
     mapLabel.Size = UDim2.new(1, 0, 0, 15)
     mapLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -144,7 +162,6 @@ local function updateMinimap()
     mapLabel.Font = Enum.Font.GothamBold
     table.insert(minimapObjects, mapLabel)
     
-    -- Точки монет
     for _, coin in ipairs(coins) do
         if coin and coin:IsA("BasePart") then
             local pos = coin.Position
@@ -165,6 +182,38 @@ local function updateMinimap()
     end
 end
 
+-- === ГЛОБАЛЬНЫЙ СЧЁТЧИК МОНЕТ НА КАРТЕ ===
+local coinCounterObjects = {}
+local coinCounterEnabled = true
+
+local function updateCoinCounter()
+    for _, v in ipairs(coinCounterObjects) do v:Destroy() end
+    coinCounterObjects = {}
+    if not coinCounterEnabled then return end
+    
+    local coins = getAllCoins()
+    local count = #coins
+    
+    local counterFrame = Instance.new("Frame")
+    counterFrame.Parent = game:GetService("CoreGui")
+    counterFrame.Size = UDim2.new(0, 150, 0, 30)
+    counterFrame.Position = UDim2.new(0.02, 0, 0.15, 0)
+    counterFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    counterFrame.BackgroundTransparency = 0.4
+    counterFrame.BorderSizePixel = 2
+    counterFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
+    table.insert(coinCounterObjects, counterFrame)
+    
+    local counterLabel = Instance.new("TextLabel", counterFrame)
+    counterLabel.Size = UDim2.new(1, 0, 1, 0)
+    counterLabel.BackgroundTransparency = 1
+    counterLabel.Text = "🪙 Монет: " .. count
+    counterLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+    counterLabel.TextSize = 14
+    counterLabel.Font = Enum.Font.GothamBold
+    table.insert(coinCounterObjects, counterLabel)
+end
+
 -- === СОЗДАНИЕ GUI ===
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CoinFarmGUI"
@@ -178,8 +227,8 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 30)
 MainFrame.BackgroundTransparency = 0
 MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
-MainFrame.Position = UDim2.new(0.5, -220, 0.5, -260)
-MainFrame.Size = UDim2.new(0, 440, 0, 520)
+MainFrame.Position = UDim2.new(0.5, -220, 0.5, -280)
+MainFrame.Size = UDim2.new(0, 440, 0, 560)
 MainFrame.ClipsDescendants = true
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -195,7 +244,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(0.7, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🪙 ФАРМ МОНЕТ v3.0"
+Title.Text = "🪙 ФАРМ МОНЕТ v3.3"
 Title.TextColor3 = Color3.fromRGB(255, 200, 0)
 Title.TextSize = 18
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -221,13 +270,13 @@ Container.Size = UDim2.new(1, 0, 1, -50)
 Container.Position = UDim2.new(0, 0, 0, 50)
 Container.BackgroundTransparency = 1
 Container.BorderSizePixel = 0
-Container.CanvasSize = UDim2.new(0, 0, 0, 500)
+Container.CanvasSize = UDim2.new(0, 0, 0, 550)
 Container.ScrollBarThickness = 4
 Container.ScrollBarImageColor3 = Color3.fromRGB(255, 200, 0)
 
 -- === КРУГЛАЯ КНОПКА ФАРМА ===
 local FarmBtn = Instance.new("TextButton", Container)
-FarmBtn.Size = UDim2.new(0.5, 0, 0.25, 0)
+FarmBtn.Size = UDim2.new(0.5, 0, 0.2, 0)
 FarmBtn.Position = UDim2.new(0.25, 0, 0.02, 0)
 FarmBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 FarmBtn.BackgroundTransparency = 0
@@ -253,8 +302,8 @@ FarmStatus.Font = Enum.Font.GothamBold
 
 -- === КНОПКИ УПРАВЛЕНИЯ ===
 local EspBtn = Instance.new("TextButton", Container)
-EspBtn.Size = UDim2.new(0.3, 0, 0.15, 0)
-EspBtn.Position = UDim2.new(0.05, 0, 0.3, 0)
+EspBtn.Size = UDim2.new(0.28, 0, 0.12, 0)
+EspBtn.Position = UDim2.new(0.03, 0, 0.26, 0)
 EspBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 EspBtn.BackgroundTransparency = 0
 EspBtn.Text = "👁️\nESP"
@@ -269,8 +318,8 @@ local EspCorner = Instance.new("UICorner", EspBtn)
 EspCorner.CornerRadius = UDim.new(0.3, 0)
 
 local MapBtn = Instance.new("TextButton", Container)
-MapBtn.Size = UDim2.new(0.3, 0, 0.15, 0)
-MapBtn.Position = UDim2.new(0.35, 0, 0.3, 0)
+MapBtn.Size = UDim2.new(0.28, 0, 0.12, 0)
+MapBtn.Position = UDim2.new(0.36, 0, 0.26, 0)
 MapBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 200)
 MapBtn.BackgroundTransparency = 0
 MapBtn.Text = "🗺️\nКАРТА"
@@ -284,9 +333,25 @@ MapBtn.ClipsDescendants = true
 local MapCorner = Instance.new("UICorner", MapBtn)
 MapCorner.CornerRadius = UDim.new(0.3, 0)
 
+local CounterBtn = Instance.new("TextButton", Container)
+CounterBtn.Size = UDim2.new(0.28, 0, 0.12, 0)
+CounterBtn.Position = UDim2.new(0.69, 0, 0.26, 0)
+CounterBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+CounterBtn.BackgroundTransparency = 0
+CounterBtn.Text = "🪙\nСЧЁТ"
+CounterBtn.TextColor3 = Color3.new(1, 1, 1)
+CounterBtn.TextSize = 14
+CounterBtn.BorderSizePixel = 2
+CounterBtn.BorderColor3 = Color3.fromRGB(255, 220, 50)
+CounterBtn.Font = Enum.Font.GothamBold
+CounterBtn.ClipsDescendants = true
+
+local CounterCorner = Instance.new("UICorner", CounterBtn)
+CounterCorner.CornerRadius = UDim.new(0.3, 0)
+
 local ResetBtn = Instance.new("TextButton", Container)
-ResetBtn.Size = UDim2.new(0.3, 0, 0.15, 0)
-ResetBtn.Position = UDim2.new(0.65, 0, 0.3, 0)
+ResetBtn.Size = UDim2.new(0.28, 0, 0.12, 0)
+ResetBtn.Position = UDim2.new(0.36, 0, 0.42, 0)
 ResetBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 ResetBtn.BackgroundTransparency = 0
 ResetBtn.Text = "🔄\nСБРОС"
@@ -302,8 +367,8 @@ ResetCorner.CornerRadius = UDim.new(0.3, 0)
 
 -- === СТАТИСТИКА ===
 local StatsText = Instance.new("TextLabel", Container)
-StatsText.Size = UDim2.new(0.9, 0, 0.12, 0)
-StatsText.Position = UDim2.new(0.05, 0, 0.48, 0)
+StatsText.Size = UDim2.new(0.9, 0, 0.1, 0)
+StatsText.Position = UDim2.new(0.05, 0, 0.56, 0)
 StatsText.BackgroundTransparency = 1
 StatsText.Text = "📊 Собрано: 0 | ⏱️ 0с | 🚀 0 монет/мин"
 StatsText.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -313,7 +378,7 @@ StatsText.Font = Enum.Font.Gotham
 -- === СТАТУС ===
 local StatusText = Instance.new("TextLabel", Container)
 StatusText.Size = UDim2.new(0.9, 0, 0.1, 0)
-StatusText.Position = UDim2.new(0.05, 0, 0.62, 0)
+StatusText.Position = UDim2.new(0.05, 0, 0.68, 0)
 StatusText.BackgroundTransparency = 1
 StatusText.Text = "🟢 Готов"
 StatusText.TextColor3 = Color3.fromRGB(150, 150, 180)
@@ -323,7 +388,7 @@ StatusText.Font = Enum.Font.Gotham
 -- === ИНФО О МОНЕТЕ ===
 local CoinInfo = Instance.new("TextLabel", Container)
 CoinInfo.Size = UDim2.new(0.9, 0, 0.1, 0)
-CoinInfo.Position = UDim2.new(0.05, 0, 0.73, 0)
+CoinInfo.Position = UDim2.new(0.05, 0, 0.78, 0)
 CoinInfo.BackgroundTransparency = 1
 CoinInfo.Text = "🎯 Поиск монет..."
 CoinInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -333,7 +398,7 @@ CoinInfo.Font = Enum.Font.Gotham
 -- === ТАЙМЕР ===
 local TimerText = Instance.new("TextLabel", Container)
 TimerText.Size = UDim2.new(0.9, 0, 0.1, 0)
-TimerText.Position = UDim2.new(0.05, 0, 0.84, 0)
+TimerText.Position = UDim2.new(0.05, 0, 0.88, 0)
 TimerText.BackgroundTransparency = 1
 TimerText.Text = "⏱️ Ожидание: 0с"
 TimerText.TextColor3 = Color3.fromRGB(255, 200, 100)
@@ -398,7 +463,7 @@ end)
 local farming = false
 local coinsCollected = 0
 local startTime = os.time()
-local waitTimer = 0
+local noCoinsCounter = 0
 
 -- === ФУНКЦИЯ ОБНОВЛЕНИЯ КНОПКИ ===
 local function updateButton(isFarming)
@@ -421,7 +486,6 @@ end
 local function farmLoop()
     while farming do
         RunService.Heartbeat:Wait()
-        
         setNoClip(true)
         
         local coins = getAllCoins()
@@ -429,18 +493,29 @@ local function farmLoop()
         
         if #coins > 0 then
             coin = coins[1]
+            noCoinsCounter = 0
         end
         
         if not coin then
-            StatusText.Text = "⏳ Ожидание монет..."
+            noCoinsCounter = noCoinsCounter + 1
+            StatusText.Text = "⏳ Ожидание монет... (" .. noCoinsCounter .. "с)"
             CoinInfo.Text = "❌ Монет нет на карте"
-            TimerText.Text = "⏱️ Ожидание: " .. waitTimer .. "с"
-            waitTimer = waitTimer + 1
+            TimerText.Text = "⏱️ Ожидание: " .. noCoinsCounter .. "с"
+            
+            if noCoinsCounter >= 10 then
+                StatusText.Text = "🔄 Монет нет! Делаем респавн..."
+                TimerText.Text = "⏱️ Респавн через 3с..."
+                wait(3)
+                respawnPlayer()
+                noCoinsCounter = 0
+                wait(2)
+            end
+            
             wait(1)
             continue
         end
         
-        waitTimer = 0
+        noCoinsCounter = 0
         TimerText.Text = "⏱️ Монета найдена!"
         
         CoinInfo.Text = "✅ Монета найдена! Летим..."
@@ -483,7 +558,7 @@ FarmBtn.MouseButton1Click:Connect(function()
         updateButton(true)
         startTime = os.time()
         coinsCollected = 0
-        waitTimer = 0
+        noCoinsCounter = 0
         StatsText.Text = "📊 Собрано: 0 | ⏱️ 0с | 🚀 0 монет/мин"
         CoinInfo.Text = "🪙 Поиск монет..."
         coroutine.wrap(farmLoop)()
@@ -510,42 +585,15 @@ MapBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+CounterBtn.MouseButton1Click:Connect(function()
+    coinCounterEnabled = not coinCounterEnabled
+    CounterBtn.Text = coinCounterEnabled and "🪙\nСЧЁТ" or "🪙\nВЫКЛ"
+    CounterBtn.BorderColor3 = coinCounterEnabled and Color3.fromRGB(255, 220, 50) or Color3.fromRGB(200, 50, 50)
+    if not coinCounterEnabled then
+        for _, v in ipairs(coinCounterObjects) do v:Destroy() end
+        coinCounterObjects = {}
+    end
+end)
+
 ResetBtn.MouseButton1Click:Connect(function()
-    if Char and Char:FindFirstChild("HumanoidRootPart") then
-        Char.HumanoidRootPart.CFrame = CFrame.new(0, 10, 0)
-        StatusText.Text = "🔄 Позиция сброшена!"
-        waitTimer = 0
-        TimerText.Text = "⏱️ Сброс позиции"
-    end
-end)
-
--- === ОБНОВЛЕНИЯ ===
-coroutine.wrap(function()
-    while true do
-        RunService.Heartbeat:Wait()
-        updateCoinESP()
-        updateMinimap()
-    end
-end)()
-
--- === ОТКРЫТИЕ ПО ALT ===
-UserInput.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.RightAlt or input.KeyCode == Enum.KeyCode.LeftAlt then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-end)
-
--- === ПРИ ПЕРЕСОЗДАНИИ ПЕРСОНАЖА ===
-LP.CharacterAdded:Connect(function(newChar)
-    Char = newChar
-end)
-
--- === СТАРТ ===
-local coins = getAllCoins()
-CoinInfo.Text = #coins > 0 and "✅ Найдено монет: " .. #coins or "❌ Монет не найдено!"
-StatusText.Text = #coins > 0 and "🟢 Нажми ФАРМ" or "❌ Проверь путь!"
-
-print("🪙 ФАРМ МОНЕТ v3.0 (MEGA UPDATE)")
-print("📊 Счётчик монет | ⏱️ Таймер | 🗺️ Мини-карта")
-print("📱 Кнопка 🪙 перетаскивается")
-print("🎯 Alt — открыть/закрыть")
+    if C
